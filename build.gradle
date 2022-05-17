@@ -1,0 +1,35 @@
+plugins {
+    id 'java'
+    id "io.freefair.lombok" version "6.0.0-m2" // TODO versionの外だし
+    id 'application'
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    // plugin
+    lombokPluginVersion = '6.0.0-m2'
+
+    logBackVersion = '1.2.3'
+    nettyAllVersion = '4.1.24.Final'
+    bouncyCastleVersion = '1.68'
+}
+
+dependencies {
+    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+    implementation 'org.bouncycastle:bcpkix-jdk15on:1.70'
+    implementation 'com.google.guava:guava:23.0-android'
+    implementation 'io.netty:netty-handler:4.0.51.Final'
+    implementation 'org.apache.httpcomponents:httpclient:4.5.13'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+}
+
+test {
+    useJUnitPlatform()
+}
