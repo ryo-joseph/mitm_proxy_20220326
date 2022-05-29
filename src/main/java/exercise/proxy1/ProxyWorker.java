@@ -208,9 +208,7 @@ public class ProxyWorker extends Thread {
 
           CertificateAndKey certificateAndKey = defaultSecurityProviderTool.createServerCertificate(
               hostnameCertificateInfoGenerator.generate(List.of(cn), originalCertificate),
-//              RootCertificateGenerator.builder().build().load().getCertificate(),
               caCertificate,
-//              new RSAKeyGenerator().generate().getPrivate(),
               privateKeyEntry.getPrivateKey(),
               new RSAKeyGenerator().generate(),
               MitmConstans.DEFAULT_MESSAGE_DIGEST
@@ -243,12 +241,9 @@ public class ProxyWorker extends Thread {
             BufferedReader in = new BufferedReader(new InputStreamReader(inputStream));
             while((line = in.readLine()) != null) {
               System.out.println(">>> " + line);
+              clientOutputStream.write((line +"\r\n").getBytes());
               if (line.length() == 0) break;
             }
-            clientOutputStream.write("GET / HTTP/1.1\r\n".getBytes());
-            clientOutputStream.write("Host: www.google.com\r\n".getBytes());
-            clientOutputStream.write("User-Agent: curl/7.81.0\r\n".getBytes());
-            clientOutputStream.write("Accept: */*\r\n".getBytes());
             clientOutputStream.write("\r\n".getBytes());
 
             String realTargetLine;
