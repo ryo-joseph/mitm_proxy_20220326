@@ -1,5 +1,6 @@
 package exercise.proxy1;
 
+import com.sun.source.doctree.SeeTree;
 import io.netty.handler.ssl.SslContext;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -10,6 +11,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -24,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import java.util.spi.AbstractResourceBundleProvider;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSession;
@@ -102,23 +106,27 @@ public class ProxyWorker extends Thread {
 
   }
 
-  private static String readLine(InputStream stream) throws IOException {
-    char c;
-    String s = "";
-    do {
-      c = (char) stream.read();
-      if (c == '\n')
-        return null;
-      s += c + "";
-    } while (c != -1);
-    return s;
-  }
-
-  private static void showX509Certificate(X509Certificate certificate)
-      throws CertificateNotYetValidException, CertificateExpiredException {
-    System.out.println("getBasicConstraints: " + certificate.getBasicConstraints());
-
-    certificate.checkValidity();
+  private static String readLine(InputStream inputStream) throws IOException {
+    String line = null;
+    int ch = -1;
+    try {
+      while ((ch = inputStream.read()) > 0) {
+        if (ch == '\r') {
+          continue;
+        } else if (ch == '\n') {
+          break;
+        } else {
+          line = (line != null ? line + (char) ch : "" + (char) ch);
+        }
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      if (line == null && ch == '\n') {
+        return "";
+      }
+      return line;
+    }
   }
 
   @Override
@@ -161,8 +169,6 @@ public class ProxyWorker extends Thread {
 //          targetSocket = new Socket(targetHost, targetPort);
           targetHost = (String)context.getAttribute("https.host");
           targetPort = (Integer)context.getAttribute("https.port");
-          targetSocket = new Socket("localhost", 8889);
-
 
           SSLSocket clientSslSocket = (SSLSocket) sslSocketFactory.createSocket(
               targetHost, targetPort);
@@ -176,10 +182,6 @@ public class ProxyWorker extends Thread {
               .getInstance(TrustManagerFactory.getDefaultAlgorithm());
           KeyStore ks = KeyStore.getInstance("JKS");
           ks.load(new FileInputStream("src/main/resources/keystore.jks"), "changeit".toCharArray()); // You don't need the KeyStore instance to come from a file.
-//          ks.load(new FileInputStream("C:\\Program Files\\Amazon Corretto\\jdk11.0.11_9\\lib\\security\\cacerts"), "changeit".toCharArray()); // You don't need the KeyStore instance to come from a file.
-//          ks.load("src/main/resources/cacerts", "changeit".toCharArray()); // You don't need the KeyStore instance to come from a file.
-//          ks.setCertificateEntry("keystore_alias", originalCertificate);
-//          ks.setCertificateEntry("new_keystore_alias", certificateAndKey.getCertificate());
 
           tmf.init(ks);
           X509Certificate caCertificate = null;
@@ -193,16 +195,23 @@ public class ProxyWorker extends Thread {
               }
             }
           }
-//          Certificate[] chain = ks.getCertificateChain("ca_alias");
-//          for (Certificate c: chain) {
-//            System.out.println(((X509Certificate)c).getIssuerX500Principal());
-//          }
+
+          // keystore内に、認証認可の秘密鍵のインポートが必要
+          KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry) ks.getEntry(
+              "inter_key",
+              new KeyStore.PasswordProtection("changeit".toCharArray())
+          );
+
+          String cn = originalCertificate.getSubjectX500Principal()
+              .getName().split(",")[0].split("=")[1];
+          System.out.println(cn);
 
           CertificateAndKey certificateAndKey = defaultSecurityProviderTool.createServerCertificate(
-              hostnameCertificateInfoGenerator.generate(List.of(originalCertificate.getSubjectX500Principal().getName()), originalCertificate),
+              hostnameCertificateInfoGenerator.generate(List.of(cn), originalCertificate),
 //              RootCertificateGenerator.builder().build().load().getCertificate(),
               caCertificate,
-              new RSAKeyGenerator().generate().getPrivate(),
+//              new RSAKeyGenerator().generate().getPrivate(),
+              privateKeyEntry.getPrivateKey(),
               new RSAKeyGenerator().generate(),
               MitmConstans.DEFAULT_MESSAGE_DIGEST
           );
@@ -223,50 +232,35 @@ public class ProxyWorker extends Thread {
               insocket, insocket.getInetAddress().getHostAddress(), insocket.getPort(), false);
           sslSocket.setUseClientMode(false);
 
-          String line = "";
-//          final InputStream inputStream = sslSocket.getInputStream();
-          try (final InputStream inputStream = sslSocket.getInputStream();
-            final OutputStream outputStream = sslSocket.getOutputStream()) {
+          try (
+              final InputStream inputStream = sslSocket.getInputStream();
+              final OutputStream outputStream = sslSocket.getOutputStream();
+              final InputStream clientInputStream = clientSslSocket.getInputStream();
+              final OutputStream clientOutputStream = clientSslSocket.getOutputStream();
+          ) {
 
-            int ch;
-//          while (reader.ready()) {
-//            System.out.print(">> " + reader.readLine());
-//          }
-//          System.out.println(">>> ");
-            while ((inputStream.available()) == 0) {
-              System.out.print((char) inputStream.read());
-//              line += (char) ch;
+            String line = "";
+            BufferedReader in = new BufferedReader(new InputStreamReader(inputStream));
+            while((line = in.readLine()) != null) {
+              System.out.println(">>> " + line);
+              if (line.length() == 0) break;
             }
-            System.out.println("REQUEST!");
-            System.out.println(line);
-//          if (line.startsWith("GET")) {
-//            System.out.println("GET!");
-//          }
-//          while((line = readLine(inputStream)) != null) {
-//            System.out.println(">>> " + line);
-//          }
-//          System.out.println(" <<<");
-//          inputStream.close();
-//
-            System.out.println("RESPONSE");
-//            final OutputStream outputStream = sslSocket.getOutputStream();
-//          for (char c : "HTTP/1.1 200 OK\r\n".toCharArray()) {
-            for (char c : "HTTP/1.1 404 NOT FOUND\r\n".toCharArray()) {
-              outputStream.write((int)c);
+            clientOutputStream.write("GET / HTTP/1.1\r\n".getBytes());
+            clientOutputStream.write("Host: www.google.com\r\n".getBytes());
+            clientOutputStream.write("User-Agent: curl/7.81.0\r\n".getBytes());
+            clientOutputStream.write("Accept: */*\r\n".getBytes());
+            clientOutputStream.write("\r\n".getBytes());
+
+            String realTargetLine;
+            while ((realTargetLine = readLine(clientInputStream)) != null) {
+                System.out.println(realTargetLine);
+              outputStream.write((realTargetLine + "\r\n").getBytes());
             }
-            outputStream.write((int)'\r');
-            outputStream.write((int)'\n');
-//          outputStream.write("HTTP/1.1 200 OK\r\n".getBytes());
-//          outputStream.write("text/html\r\n".getBytes());
-//          outputStream.write("\r\n".getBytes());
-//          outputStream.write("<html><body>Hello</body></html>\r\n".getBytes());
-//          outputStream.close();
+            outputStream.write("\r\n".getBytes());
+
           } catch (Exception e) {
-            System.out.println("ERROR");
             e.printStackTrace();
           }
-
-//          sslSocket.close();
           return;
         }
 
