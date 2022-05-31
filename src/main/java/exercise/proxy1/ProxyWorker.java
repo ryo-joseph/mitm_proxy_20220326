@@ -238,7 +238,7 @@ public class ProxyWorker extends Thread {
           ) {
 
             String line = "";
-            BufferedReader in = new BufferedReader(new InputStreamReader(inputStream));
+            BufferedReader in = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
             while((line = in.readLine()) != null) {
               System.out.println(">>> " + line);
               clientOutputStream.write((line +"\r\n").getBytes());
@@ -247,11 +247,16 @@ public class ProxyWorker extends Thread {
             clientOutputStream.write("\r\n".getBytes());
 
             String realTargetLine;
-            while ((realTargetLine = readLine(clientInputStream)) != null) {
-                System.out.println(realTargetLine);
-              outputStream.write((realTargetLine + "\r\n").getBytes());
+            int ch;
+            while ((ch = clientInputStream.read())!= -1) {
+              outputStream.write(ch);
             }
-            outputStream.write("\r\n".getBytes());
+//            BufferedReader clientIn = new BufferedReader(new InputStreamReader(clientInputStream, StandardCharsets.UTF_8));
+////            while ((realTargetLine = readLine(clientInputStream)) != null) {
+//            while ((realTargetLine = clientIn.readLine()) != null) {
+//                System.out.println(realTargetLine);
+//              outputStream.write((realTargetLine + "\r\n").getBytes());
+//            }
 
           } catch (Exception e) {
             e.printStackTrace();
